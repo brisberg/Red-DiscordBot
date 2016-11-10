@@ -354,6 +354,7 @@ class Audio:
             song_filename = os.path.join(self.cache_path, filename)
 
         use_avconv = self.settings["AVCONV"]
+        before_options = '-ss 00:01:00 -t 00:05:00'
         options = '-b:a 64k -bufsize 64k'
 
         try:
@@ -367,7 +368,7 @@ class Audio:
         log.debug("making player on sid {}".format(server.id))
 
         voice_client.audio_player = voice_client.create_ffmpeg_player(
-            song_filename, use_avconv=use_avconv, options=options)
+            song_filename, use_avconv=use_avconv, before_options=before_options, options=options)
 
         # Set initial volume
         vol = self.get_server_settings(server)['VOLUME'] / 100
