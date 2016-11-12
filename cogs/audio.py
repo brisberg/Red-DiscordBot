@@ -354,7 +354,11 @@ class Audio:
             song_filename = os.path.join(self.cache_path, filename)
 
         use_avconv = self.settings["AVCONV"]
+<<<<<<< Updated upstream
         before_options = '-ss 00:01:00 -t 00:05:00'
+=======
+        before_options = '-ss 00:01:00 -t 00:00:15'
+>>>>>>> Stashed changes
         options = '-b:a 64k -bufsize 64k'
 
         try:
