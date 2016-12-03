@@ -260,20 +260,20 @@ class Audio:
         await self.bot.change_presence(status=status, game=game)
         log.debug('Bot status changed to song title: ' + song.title)
 
-    def _add_to_queue(self, server, url):
+    def _add_to_queue(self, server, url, start_ts, duration):
         if server.id not in self.queue:
             self._setup_queue(server)
-        self.queue[server.id]["QUEUE"].append(url)
+        self.queue[server.id]["QUEUE"].append((url, start_ts, duration))
 
-    def _add_to_temp_queue(self, server, url):
+    def _add_to_temp_queue(self, server, url, start_ts, duration):
         if server.id not in self.queue:
             self._setup_queue(server)
-        self.queue[server.id]["TEMP_QUEUE"].append(url)
+        self.queue[server.id]["TEMP_QUEUE"].append((url, start_ts, duration))
 
-    def _addleft_to_queue(self, server, url):
+    def _addleft_to_queue(self, server, url, start_ts="", duration=""):
         if server.id not in self.queue:
             self._setup_queue()
-        self.queue[server.id]["QUEUE"].appendleft(url)
+        self.queue[server.id]["QUEUE"].appendleft((url, start_ts, duration))
 
     def _cache_desired_files(self):
         filelist = []
@@ -322,7 +322,8 @@ class Audio:
         self.queue[server.id]["QUEUE"] = deque()
         self.queue[server.id]["TEMP_QUEUE"] = deque()
 
-    async def _create_ffmpeg_player(self, server, filename, local=False):
+    async def _create_ffmpeg_player(self, server, filename, local=False,
+                                    start_ts=None, duration=None):
         """This function will guarantee we have a valid voice client,
             even if one doesn't exist previously."""
         voice_channel_id = self.queue[server.id]["VOICE_CHANNEL_ID"]
@@ -354,11 +355,9 @@ class Audio:
             song_filename = os.path.join(self.cache_path, filename)
 
         use_avconv = self.settings["AVCONV"]
-<<<<<<< Updated upstream
-        before_options = '-ss 00:01:00 -t 00:05:00'
-=======
-        before_options = '-ss 00:01:00 -t 00:00:15'
->>>>>>> Stashed changes
+        before_options = None
+        if start_ts and duration:
+            before_options = '-ss {} -t {}'.format(start_ts, duration)
         options = '-b:a 64k -bufsize 64k'
 
         try:
@@ -372,7 +371,8 @@ class Audio:
         log.debug("making player on sid {}".format(server.id))
 
         voice_client.audio_player = voice_client.create_ffmpeg_player(
-            song_filename, use_avconv=use_avconv, before_options=before_options, options=options)
+            song_filename, use_avconv=use_avconv,
+            before_options=before_options, options=options)
 
         # Set initial volume
         vol = self.get_server_settings(server)['VOLUME'] / 100
@@ -497,7 +497,7 @@ class Audio:
         ret = []
         for i in range(limit):
             try:
-                ret.append(self.queue[server.id]["QUEUE"][i])
+                ret.append(self.queue[server.id]["QUEUE"][i][0])
             except IndexError:
                 pass
 
@@ -528,7 +528,7 @@ class Audio:
         ret = []
         for i in range(limit):
             try:
-                ret.append(self.queue[server.id]["TEMP_QUEUE"][i])
+                ret.append(self.queue[server.id]["TEMP_QUEUE"][i][0])
             except IndexError:
                 pass
         return ret
@@ -735,7 +735,7 @@ class Audio:
 
         return playlist
 
-    async def _play(self, sid, url):
+    async def _play(self, sid, start, duration, url):
         """Returns the song object of what's playing"""
         if type(sid) is not discord.Server:
             server = self.bot.get_server(sid)
@@ -761,8 +761,8 @@ class Audio:
             except FileNotFoundError:
                 raise
 
-        voice_client = await self._create_ffmpeg_player(server, song.id,
-                                                        local=local)
+        voice_client = await self._create_ffmpeg_player(server, song.id, start,
+                                                        duration, local=local)
         # That ^ creates the audio_player property
 
         voice_client.audio_player.start()
@@ -1525,7 +1525,7 @@ class Audio:
         await self.playlist_start.callback(self, ctx, name)
 
     @commands.command(pass_context=True, no_pm=True, name="queue")
-    async def _queue(self, ctx, *, url=None):
+    async def _queue(self, ctx, *, url=None, start_ts="", duration=""):
         """Queues a song to play next. Extended functionality in `[p]help`
 
         If you use `queue` when one song is playing, your new song will get
@@ -1561,11 +1561,11 @@ class Audio:
         if self.queue[server.id]["PLAYLIST"]:
             log.debug("queueing to the temp_queue for sid {}".format(
                 server.id))
-            self._add_to_temp_queue(server, url)
+            self._add_to_temp_queue(server, url, start_ts, duration)
         else:
             log.debug("queueing to the actual queue for sid {}".format(
                 server.id))
-            self._add_to_queue(server, url)
+            self._add_to_queue(server, url, start_ts, duration)
         await self.bot.say("Queued.")
 
     async def _queue_list(self, ctx):
