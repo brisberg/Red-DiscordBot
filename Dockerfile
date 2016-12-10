@@ -13,10 +13,11 @@ RUN wget --no-check-certificate -O /tmp/get-pip.py http://bootstrap.pypa.io/get-
 RUN pip install --trusted-host pypi.python.org $PIPLIST
 
 COPY . /app
+RUN chmod 0744 /app/entrypoint.sh
 RUN mv /app/cogs /app/cogs_backup
 
 VOLUME /app/cogs
 VOLUME /app/data
 WORKDIR /app
 
-CMD ["python", "./red.py", "--no-prompt"]
+ENTRYPOINT ["/app/entrypoint.sh"]
