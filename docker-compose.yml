@@ -3,3 +3,6 @@
 
 docker build . -t docker-red
 docker run --name localred --rm -v $(pwd)/volumes/data:/app/data -v $(pwd)/volumes/cogs:/app/cogs docker-red
+
+on GCS:
+docker run -d --name discord-red -v /mnt/disks/docker-discord-red-disk/etc/discord-red/cogs:/app/cogs -v /mnt/disks/docker-discord-red-disk/etc/discord-red/data:/app/data brisberg/red-discordbot
