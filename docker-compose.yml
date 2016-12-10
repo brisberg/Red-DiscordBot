@@ -1,3 +1,5 @@
 #TODO
+# temporary docker run commands till a yml is setup
+
 docker build . -t docker-red
 docker run --name localred --rm -v $(pwd)/volumes/data:/app/data -v $(pwd)/volumes/cogs:/app/cogs docker-red
