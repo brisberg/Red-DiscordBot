@@ -121,6 +121,7 @@ class Song:
         self.title = kwargs.pop('title', None)
         self.id = kwargs.pop('id', None)
         self.url = kwargs.pop('url', None)
+        self.path = kwargs.pop('path', None)
         self.webpage_url = kwargs.pop('webpage_url', "")
         self.duration = kwargs.pop('duration', 60)
 
@@ -203,6 +204,7 @@ class Downloader(threading.Thread):
         if not os.path.isfile('data/audio/cache' + self.song.id):
             video = self._yt.extract_info(self.url)
             self.song = Song(**video)
+            self.song.path = 'data/audio/cache'
 
     def duration_check(self):
         log.debug("duration {} for songid {}".format(self.song.duration,
@@ -322,7 +324,7 @@ class Audio:
         self.queue[server.id]["QUEUE"] = deque()
         self.queue[server.id]["TEMP_QUEUE"] = deque()
 
-    async def _create_ffmpeg_player(self, server, filename, local=False):
+    async def _create_ffmpeg_player(self, server, path, filename):
         """This function will guarantee we have a valid voice client,
             even if one doesn't exist previously."""
         voice_channel_id = self.queue[server.id]["VOICE_CHANNEL_ID"]
@@ -348,10 +350,7 @@ class Audio:
 
         # Okay if we reach here we definitively have a working voice_client
 
-        if local:
-            song_filename = os.path.join(self.local_playlist_path, filename)
-        else:
-            song_filename = os.path.join(self.cache_path, filename)
+        song_filename = os.path.join(path, filename)
 
         use_avconv = self.settings["AVCONV"]
         options = '-b:a 64k -bufsize 64k'
@@ -642,7 +641,7 @@ class Audio:
     def _make_local_song(self, filename):
         # filename should be playlist_folder/file_name
         folder, song = os.path.split(filename)
-        return Song(name=song, id=filename, title=song, url=filename,
+        return Song(name=song, id=song, title=song, path=folder,
                     webpage_url=filename)
 
     def _make_playlist(self, author, url, songlist):
@@ -730,7 +729,7 @@ class Audio:
 
         return playlist
 
-    async def _play(self, sid, url):
+    async def _play(self, sid, url_or_path):
         """Returns the song object of what's playing"""
         if type(sid) is not discord.Server:
             server = self.bot.get_server(sid)
@@ -740,7 +739,8 @@ class Audio:
         assert type(server) is discord.Server
         log.debug('starting to play on "{}"'.format(server.name))
 
-        if self._valid_playable_url(url) or "[SEARCH:]" in url:
+        if self._valid_playable_url(url_or_path) or "[SEARCH:]" in url_or_path:
+            url = url_or_path
             try:
                 song = await self._guarantee_downloaded(server, url)
             except MaximumLength:
@@ -748,16 +748,17 @@ class Audio:
                             " Use [p]audioset maxlength to change this.\n\n"
                             "{}".format(url))
                 raise
-            local = False
         else:  # Assume local
             try:
-                song = self._make_local_song(url)
-                local = True
+                path = url_or_path
+                if not os.path.exists(path):
+                    path = os.path.join(self.local_playlist_path, path)
+                song = self._make_local_song(path)
             except FileNotFoundError:
                 raise
 
-        voice_client = await self._create_ffmpeg_player(server, song.id,
-                                                        local=local)
+        voice_client = await self._create_ffmpeg_player(server, song.path,
+                                                        song.id)
         # That ^ creates the audio_player property
 
         voice_client.audio_player.start()
@@ -1243,7 +1244,7 @@ class Audio:
 
     @commands.command(pass_context=True, no_pm=True)
     async def play(self, ctx, *, url_or_search_terms):
-        """Plays a link / searches and play"""
+        """Plays a local file or link / searches and play"""
         url = url_or_search_terms
         server = ctx.message.server
         author = ctx.message.author
@@ -1286,16 +1287,17 @@ class Audio:
             await self.bot.say("I'm already downloading a file!")
             return
 
-        if "." in url:
-            if not self._valid_playable_url(url):
-                await self.bot.say("That's not a valid URL.")
-                return
-        else:
-            url = url.replace("/", "&#47")
-            url = "[SEARCH:]" + url
+        if not os.path.exists(url):
+            if "." in url:
+                if not self._valid_playable_url(url):
+                    await self.bot.say("That's not a valid URL.")
+                    return
+            elif not os.path.exists(url):
+                url = url.replace("/", "&#47")
+                url = "[SEARCH:]" + url
 
-        if "[SEARCH:]" not in url and "youtube" in url:
-            url = url.split("&")[0]  # Temp fix for the &list issue
+            if "[SEARCH:]" not in url and "youtube" in url:
+                url = url.split("&")[0]  # Temp fix for the &list issue
 
         self._stop_player(server)
         self._clear_queue(server)
@@ -2066,6 +2068,7 @@ def check_files():
                         "Adding " + str(key) + " field to audio settings.json")
             dataIO.save_json(settings_path, current)
 
+
 def verify_ffmpeg_avconv():
     try:
         subprocess.call(["ffmpeg", "-version"], stdout=subprocess.DEVNULL)
@@ -2080,6 +2083,7 @@ def verify_ffmpeg_avconv():
         return False
     else:
         return "avconv"
+
 
 def setup(bot):
     check_folders()
